@@ -46,3 +46,11 @@ cmake-build-debug/
 compile_commands.json
 
 *.idx
+
+# Keyboard Curator fork: the Nordic SDK is downloaded, not committed;
+# build outputs, build logs and release files
+/libraries/SDK/
+/build/release/
+/build/debug/
+/build-*.log
+/dist/

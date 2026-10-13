@@ -58,6 +58,8 @@ extern "C"
 #include "Kaleidoscope-Colormap.h"
 #include "Kaleidoscope-DynamicMacros.h"
 #include "Kaleidoscope-KeyRoleManager.h"
+#include "Kaleidoscope-ChordsDygma.h"
+#include "Kaleidoscope-KeyTimingDygma.h"
 #include "Kaleidoscope-EEPROM-Keymap.h"
 #include "Kaleidoscope-FocusSerial.h"
 #include "Kaleidoscope-IdleLEDsDefy.h"
@@ -349,12 +351,15 @@ static kaleidoscope::plugin::LEDStalkerDefy stalkerDefy{};
 KALEIDOSCOPE_INIT_PLUGINS
 (
     EEPROMSettings,
-    EEPROMKeymap, FirmwareVersion, FocusSettingsCommand, FocusEEPROMCommand, Upgrade,keyRoleManager,
+    EEPROMKeymap, FirmwareVersion, FocusSettingsCommand, FocusEEPROMCommand, Upgrade,
+    /* Chords hold presses back before any plugin decides what a key does. */
+    Chords,
+    keyRoleManager,
     LEDControl, FocusLEDCommand,
     LEDPaletteThemeDefy, ColormapEffectDefy,
     LEDRainbowWaveEffectDefy, LEDRainbowEffectDefy, stalkerDefy, solidRedDefy,
     solidGreenDefy, solidBlueDefy, solidWhiteDefy, solidBlackDefy, batteryStatus,ledBluetoothPairingDefy,
-    IdleLEDsDefy,PersistentIdleDefyLEDs, KeyboardFocus, DynamicMacros,
+    IdleLEDsDefy,PersistentIdleDefyLEDs, KeyboardFocus, DynamicMacros, KeyTiming,
     /*SideFlash,*/ Focus, MouseKeys, OneShot, LayerFocus,
     HostPowerManagement,Battery,
     /*BLE*/
@@ -399,6 +404,9 @@ void setup(void)
     //SuperkeysHandler.setup(); // Initialize the SuperkeysHandler plugin.
     keyRoleManager.setup_superkeys(MAX_LAYERS);   // Initialize the keyRoleManager plugin.
     DynamicMacros.reserve_storage(2048);
+    // After everything stock firmware stores, so that its layout is unchanged.
+    Chords.reserve_storage();
+    KeyTiming.reserve_storage();
 
     // Keep the HID begin after the Kaleidoscope setup.
     HID().begin();

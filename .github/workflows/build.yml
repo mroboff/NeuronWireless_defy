@@ -1,0 +1,99 @@
+name: Build
+
+# Builds the Neuron image on every push and pull request, and on a tag
+# `v*` publishes a release with the image, Dygma's own keyscanner image
+# for the sides, a SHA256SUMS list and a manifest naming the sources.
+on:
+  push:
+    branches: [curator]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  SDK_NAME: nRF5_SDK_17.1.0_ddde560
+  SDK_URL: https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/sdks/nrf5/binaries/nrf5_sdk_17.1.0_ddde560.zip
+  SDK_SHA256: 5bfe38e744c39fd7f30e10077ba12df306ef91f368894795d6a3e7a62dc68061
+  BASE_TAG: Defy_v2.2.1
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch submodules over HTTPS
+        # Dygma's nested submodules name SSH URLs, which need no key this way.
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+
+      - name: Install the toolchain (GCC ARM 10.3, as Dygma builds with)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi python3-intelhex make
+          arm-none-eabi-gcc --version | head -1
+
+      - name: Cache the Nordic SDK
+        id: sdk
+        uses: actions/cache@v4
+        with:
+          path: libraries/SDK/${{ env.SDK_NAME }}
+          key: sdk-${{ env.SDK_NAME }}
+
+      - name: Download the Nordic SDK
+        if: steps.sdk.outputs.cache-hit != 'true'
+        run: |
+          curl -sSL -o sdk.zip "$SDK_URL"
+          echo "$SDK_SHA256  sdk.zip" | sha256sum -c -
+          mkdir -p libraries/SDK
+          unzip -q sdk.zip -d libraries/SDK
+          rm sdk.zip
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=v2.2.1-curator.dev+$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        run: make -C build release -j"$(nproc)" SHELL=/bin/bash DEFY_FW_VERSION="${{ steps.version.outputs.version }}"
+
+      - name: Collect the release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          cp build/release/NeuronWireless_defy_final.hex dist/Wireless_neuron.hex
+          # The sides keep Dygma's own keyscanner firmware: Bazecor's custom
+          # firmware folder wants it beside the Neuron image.
+          gh release download "$BASE_TAG" -R Dygmalab/Firmware-release -p keyscanner.bin -D dist
+          export CURATOR_GCC_VERSION="$(arm-none-eabi-gcc --version | head -1)"
+          python3 tools/manifest.py dist "${{ steps.version.outputs.version }}" "Dygmalab/Firmware-release $BASE_TAG"
+          ls -la dist
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: defy-curator-${{ steps.version.outputs.version }}
+          path: dist/*
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          gh release create "$tag" dist/Wireless_neuron.hex dist/keyscanner.bin dist/SHA256SUMS dist/manifest.json \
+            --title "Defy wireless firmware $tag (Keyboard Curator fork)" \
+            --notes-file CURATOR-RELEASE-NOTES.md \
+            --prerelease
