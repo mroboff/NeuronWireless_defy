@@ -37,7 +37,7 @@ jobs:
       - name: Install the toolchain (GCC ARM 10.3, as Dygma builds with)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi python3-intelhex make
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3-intelhex make
           arm-none-eabi-gcc --version | head -1
 
       - name: Cache the Nordic SDK
